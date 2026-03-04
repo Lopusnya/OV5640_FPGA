@@ -12,21 +12,23 @@ module sdram
     input                  in_vld, // Валидность входных данных
     input logic   [15:0]  data_in, // входные данные
     input                    wr_e, // Если он в 1, то значит пишем в SDRAM
-    input               instr_vld, //
-    input         [21:0]    instr, //
+    input               instr_vld, // 
+    input         [21:0]    instr, // Инструкция, состоит из адреса банка, строки и колонки
 
-    output                    rdy,
+    output logic        instr_rdy, // Сигнал готовности принять инструкцию
+    output          data_read_vld, // 
+    output logic         data_rdy, // Сигнал готовности принять данные
+    output logic [15:0]  data_out, // Вывод данных наружу
 
+    // Сигналы для SDRAM ----------------------------------------------------------------------------------
     output                    cke, //clock enable
     output                     cs, //chip select
     output logic              ras, //row adress strobe
     output logic              cas, //Column Address Strobe,
     output logic         we_sdram, //write enable
     output                    dqm, //mask for data
-
     output logic [1: 0]  bank_adr, //bank adress
     output logic [11:0]       adr, //row and column adress. Row adress [11:0] RA, Column adress [7:0] CA
-    output logic [15:0]  data_out, //for VGA
 
     inout   [15:0]  sdram_data_rw  //data read/write in sdram
 );
@@ -34,7 +36,8 @@ module sdram
     localparam       delay_rp  = 2;
     localparam       delay_rcd = 2;
     localparam       delay_dpl = 2;
-    localparam delay_full_page = 255;
+    localparam delay_full_page = 254;
+    localparam           w_cnt = 10;
 
     logic            output_enable;
     logic              read_enable;
@@ -91,11 +94,13 @@ module sdram
         if (rst) begin
             cnt <= '0;
         end else if (cnt_vld && state == PALL) begin
-            cnt <= 9'(delay_rp);
+            cnt <= w_cnt'(delay_rp);
         end else if (cnt_vld && state == IDLE && instr_vld) begin
-            cnt <= 9'(delay_rcd);
-        end else if (cnt_vld && (state == WRITE || state == READ)) begin
-            cnt <= 9'(delay_full_page + delay_dpl);
+            cnt <= w_cnt'(delay_rcd);
+        end else if (cnt_vld && (state == WRITE)) begin
+            cnt <= w_cnt'(delay_full_page + delay_dpl);
+        end else if (cnt_vld && (state == READ)) begin
+            cnt <= w_cnt'(delay_full_page + delay_dpl + cas_latency);
         end else if( cnt > 0) begin
             cnt <= cnt - 1'b1;
         end
@@ -104,17 +109,24 @@ module sdram
     always_ff @( posedge clk ) begin : inout_data
         if (rst) 
             reg_data_read <= '0;
-        else
+        else if(read_enable)
             reg_data_read <= sdram_data_rw;
     end
 
-    always_ff @( posedge clk ) begin : data_in_reg
-        if (rst) begin
-            reg_data_write <= '0;
-        end else if (in_vld) begin
-            reg_data_write  <= data_in;
-        end
+    always_ff @( posedge clk ) begin : read_enable_reg
+        if (rst) 
+            read_enable_reg <= '0;
+        else if(read_enable)
+            read_enable_reg <= read_enable;
     end
+
+    // always_ff @( posedge clk ) begin : data_in_reg
+    //     if (rst) begin
+    //         reg_data_write <= '0;
+    //     end else if (in_vld) begin
+    //         reg_data_write  <= data_in;
+    //     end
+    // end
 
     always_ff @( posedge clk ) begin : write_in_sdram_mode
         if (rst)
@@ -128,22 +140,22 @@ module sdram
     always_ff @( posedge clk ) begin : bank_adress
         if(rst)
             bank_adr_reg <= '0;
-        else
-            bank_adr_reg <= instr [21: 20];
+        else if(instr_vld && rdy)
+                bank_adr_reg <= instr [21: 20];
     end
 
     always_ff @( posedge clk ) begin : row_adress
         if(rst)
             row_adr_reg <= '0;
-        else
-            row_adr_reg <= instr [19: 8];
+        else if(instr_vld && rdy)
+                row_adr_reg <= instr [19: 8];
     end
 
     always_ff @( posedge clk ) begin : column_adress
         if(rst)
             column_adr_reg <= '0;
-        else
-            column_adr_reg <= instr [7:0];
+        else if(instr_vld && rdy)
+                column_adr_reg <= instr [7:0];
     end
 
     always_ff @( posedge clk ) begin : return_state_logic
@@ -152,6 +164,16 @@ module sdram
         else if (state == PALL || state == ACTIVE || state == WRITE || state == READ || state == PRECHARDGE)
             return_state_reg <= return_state;
     end
+
+    always_ff @( posedge clk ) begin : data_rdy
+        if(rst)
+            data_rdy_reg <= '0;
+        else if(state == WRITE)
+                data_rdy_reg <= data_rdy;
+        else if(state != NOP)
+                data_rdy_reg <= '0;
+    end
+
     always_comb begin
         
         next_state      = state;
@@ -163,6 +185,8 @@ module sdram
         bank_adr        = '0;
         output_enable   = '0;
         read_enable     = '0;
+        instr_rdy       = '0;
+        data_rdy        = '0;
 
         case (state)
             IDLE: begin
@@ -172,8 +196,10 @@ module sdram
                         cas           = 1'b1;
                         we_sdram      = 1'b1;
 
-                        bank_adr      = bank_adr_reg;
-                        adr           = row_adr_reg;
+                        bank_adr      = instr [21: 20];
+                        adr           = instr [19: 8];
+
+                        instr_rdy     = '1;
 
                         cnt_vld       = '1;
                         next_state    = NOP;
@@ -218,6 +244,8 @@ module sdram
                 next_state    = NOP;
                 return_state  = PRECHARDGE;
 
+                data_rdy      = '1;
+
                 output_enable = '1;
             end
 
@@ -256,17 +284,19 @@ module sdram
 
                 if(choose_wr_rd_reg)
                     output_enable = '1;
-
-                if(cnt < 9'(delay_full_page + delay_dpl) - 9'(cas_latency))
-                    read_enable = '1;
+                else
+                    if(cnt < w_cnt'(delay_full_page + delay_dpl))
+                        read_enable = '1;
 
             end         
 
         endcase
     end
 
-    assign sdram_data_rw = output_enable ? reg_data_write : 'z; 
+    assign sdram_data_rw = (output_enable && in_vld) ? data_in : 'z; 
     assign data_out = reg_data_read;
+    assign data_read_vld = read_enable;
     assign cke = '1;
     assign cs  = '0;
+    assign dqm = '0;
 endmodule
