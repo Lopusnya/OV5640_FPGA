@@ -1,0 +1,16 @@
+Fitter Status : Successful - Sat Mar  7 00:18:50 2026
+Quartus Prime Version : 22.1std.0 Build 915 10/25/2022 SC Lite Edition
+Revision Name : OV5640_FPGA
+Top-level Entity Name : board_specific_top
+Family : Cyclone IV E
+Device : EP4CE6E22C8
+Timing Models : Final
+Total logic elements : 332 / 6,272 ( 5 % )
+    Total combinational functions : 279 / 6,272 ( 4 % )
+    Dedicated logic registers : 222 / 6,272 ( 4 % )
+Total registers : 222
+Total pins : 65 / 92 ( 71 % )
+Total virtual pins : 0
+Total memory bits : 8,192 / 276,480 ( 3 % )
+Embedded Multiplier 9-bit elements : 0 / 30 ( 0 % )
+Total PLLs : 1 / 2 ( 50 % )

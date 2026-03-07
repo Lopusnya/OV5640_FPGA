@@ -34,7 +34,20 @@ module board_specific_top
     output                 VGA_G,
     output                 VGA_B,
 
-    inout  [w_gpio  - 1:0] PSEUDO_GPIO_USING_SDRAM_PINS,
+    // inout  [w_gpio  - 1:0] PSEUDO_GPIO_USING_SDRAM_PINS
+    output [        11: 0] SDRAM_A,
+    output [         1: 0] SDRAM_BS,
+    
+    output                 SDRAM_LDQM,
+    output                 SDRAM_UDQM,
+    output                 SDRAM_CLK,
+    output                 SDRAM_CKE,
+    output                 SDRAM_CS,
+    output                 SDRAM_RAS,
+    output                 SDRAM_CAS,
+    output                 SDRAM_WE,
+
+    inout  [        15: 0]  SDRAM_D
 
 );
 
@@ -68,6 +81,7 @@ module board_specific_top
     assign VGA_B = display_on & ( | blue  );
 
     wire clk_2;
+    
 
     PLL_100clk_mhz pll
     (
@@ -77,15 +91,56 @@ module board_specific_top
         .locked ()
     );
 
+    //SDRAM wire assigment
+    wire         sdram_we;
+    wire         sdram_cas;
+    wire         sdram_ras;
+    wire         sdram_cke;
+    wire         sdram_cs;
+    wire         sdram_ldqm;
+    wire         sdram_udqm;
 
-    test_sdram_top test_1 
+    wire [11:0]  sdram_address;
+    wire [ 1:0]  sdram_bank;
+    wire [15:0]  sdram_data;
+
+    assign SDRAM_CLK  = clk_2;
+    assign SDRAM_CKE  = sdram_cke;
+    assign SDRAM_CS   = sdram_cs;
+    assign SDRAM_RAS  = sdram_ras;
+    assign SDRAM_CAS  = sdram_cas;
+    assign SDRAM_WE   = sdram_we;
+    assign SDRAM_LDQM = sdram_ldqm;
+    assign SDRAM_UDQM = sdram_udqm;
+    assign SDRAM_BS   = sdram_bank;
+    assign SDRAM_A    = sdram_address;
+    assign SDRAM_D    = sdram_data;
+
+    test_sdram_top  
     #(
         .w_digit(w_digit),
-        .clk_mhz(clk_mhz)
+        .clk_mhz(clk_mhz),
+        .w_key(w_key),
+        .w_led(w_led)
     )
+    test_1
     (
         .clk(clk_2),
         .rst(rst),
+        .key (~ KEY_SW),
+        .leds(lab_led),
+
+        .sdram_we(sdram_we),
+        .sdram_cas(sdram_cas),
+        .sdram_ras(sdram_ras),
+        .sdram_cke(sdram_cke),
+        .sdram_cs(sdram_cs),
+        .sdram_ldqm(sdram_ldqm),
+        .sdram_udqm(sdram_udqm),
+        .sdram_address(sdram_address),
+        .sdram_bank(sdram_bank),
+        .sdram_data(sdram_data),
+
         .abcdefgh(abcdefgh),
         .digit(digit)
     );
