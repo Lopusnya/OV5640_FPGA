@@ -1,19 +1,15 @@
 
-State Machine - |board_specific_top|test_sdram_top:test_1|sdram:ram|return_state_reg
-Name return_state_reg.PRECHARDGE return_state_reg.WRITE return_state_reg.READ return_state_reg.SET_MODE return_state_reg.PALL return_state_reg.IDLE 
-return_state_reg.IDLE 0 0 0 0 0 0 
-return_state_reg.PALL 0 0 0 0 1 1 
-return_state_reg.SET_MODE 0 0 0 1 0 1 
-return_state_reg.READ 0 0 1 0 0 1 
-return_state_reg.WRITE 0 1 0 0 0 1 
-return_state_reg.PRECHARDGE 1 0 0 0 0 1 
-
 State Machine - |board_specific_top|test_sdram_top:test_1|sdram:ram|state
-Name state.NOP state.PRECHARDGE state.WRITE state.READ state.SET_MODE state.PALL state.IDLE 
-state.IDLE 0 0 0 0 0 0 0 
-state.PALL 0 0 0 0 0 1 1 
-state.SET_MODE 0 0 0 0 1 0 1 
-state.READ 0 0 0 1 0 0 1 
-state.WRITE 0 0 1 0 0 0 1 
-state.PRECHARDGE 0 1 0 0 0 0 1 
-state.NOP 1 0 0 0 0 0 1 
+Name state.TRP state.TRCD state.NOP state.PRECHARDGE state.READ_DONE state.WRITE state.READ state.ACTIVE state.SET_MODE state.PALL state.IDLE state.START 
+state.START 0 0 0 0 0 0 0 0 0 0 0 0 
+state.IDLE 0 0 0 0 0 0 0 0 0 0 1 1 
+state.PALL 0 0 0 0 0 0 0 0 0 1 0 1 
+state.SET_MODE 0 0 0 0 0 0 0 0 1 0 0 1 
+state.ACTIVE 0 0 0 0 0 0 0 1 0 0 0 1 
+state.READ 0 0 0 0 0 0 1 0 0 0 0 1 
+state.WRITE 0 0 0 0 0 1 0 0 0 0 0 1 
+state.READ_DONE 0 0 0 0 1 0 0 0 0 0 0 1 
+state.PRECHARDGE 0 0 0 1 0 0 0 0 0 0 0 1 
+state.NOP 0 0 1 0 0 0 0 0 0 0 0 1 
+state.TRCD 0 1 0 0 0 0 0 0 0 0 0 1 
+state.TRP 1 0 0 0 0 0 0 0 0 0 0 1 

@@ -1,0 +1,68 @@
+module video_control
+# (
+    parameter  clk_mhz       = 100,
+
+               screen_width  = 640,
+               screen_height = 480,
+
+               w_red         = 1,
+               w_green       = 1,
+               w_blue        = 1,
+
+               w_x           = $clog2 ( screen_width  ),
+               w_y           = $clog2 ( screen_height )
+)
+(
+    input                        clk,
+    input                        rst,
+
+    // Graphics
+
+    input        [w_x     - 1:0] x,
+    input        [w_y     - 1:0] y,
+
+    output logic [w_red   - 1:0] red,
+    output logic [w_green - 1:0] green,
+    output logic [w_blue  - 1:0] blue,
+
+);
+
+    logic [w_red   - 1:0] red_wire;
+    logic [w_green - 1:0] green_wire;
+    logic [w_blue  - 1:0] blue_wire;
+
+    always_comb
+    begin
+        red_wire   = '0;
+        green_wire = '0;
+        blue_wire  = '0;
+
+        if (x < screen_width && y < screen_height)
+        begin
+
+                 if (x <     128)  red_wire   = '1;
+
+            else if (x < 2 * 128)  green_wire = '1;
+
+            else if (x < 3 * 128)  blue_wire  = '1;
+
+            else if (x < 4 * 128)
+            begin
+                red_wire   = '1;
+                green_wire = '1;
+            end
+
+            else if (x < 5 * 128)
+            begin
+                green_wire = '1;
+                blue_wire  = '1;
+            end
+        end
+    end
+
+    assign red   = w_red'   ( red_wire   );
+    assign green = w_green' ( green_wire );
+    assign blue  = w_blue'  ( blue_wire  );
+
+
+endmodule

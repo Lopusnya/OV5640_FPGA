@@ -4,7 +4,7 @@ module sdram
     parameter write_mode = 1'b0,
     parameter cas_latency = 3'b010,
     parameter burst_type = 1'b0,
-    parameter burst_length = 3'b111,
+    parameter burst_length = 3'b000,
     parameter w_led = 4 
 ) 
 (
@@ -33,7 +33,10 @@ module sdram
     output logic   [1: 0]  bank_adr, //bank adress
     output logic   [11:0]       adr, //row and column adress. Row adress [11:0] RA, Column adress [7:0] CA
 
-    inout   [15:0]  sdram_data_rw  //data read/write in sdram
+    // inout   [15:0]  sdram_data_rw  //data read/write in sdram
+    output         [15:0] data_write,
+    output                        oe,
+    input          [15:0]  data_read
 );
 
     localparam       delay_rp     = w_cnt' (2);
@@ -43,12 +46,15 @@ module sdram
     localparam delay_full_page    = w_cnt' (254);
     localparam           w_cnt    = 16;
 
+    wire            [15:0] sdram_e;
+
     logic            output_enable;
     logic              read_enable;
 
     logic                 data_rdy;
     logic             set_mode_flg;
     logic                 mode_flg;
+    logic            read_mode_flg;
     logic                  cnt_vld;
     logic         choose_wr_rd_reg;
     logic             data_rdy_reg;
@@ -60,8 +66,7 @@ module sdram
     logic [13: 0]         mode_adr = {4'b0000, write_mode, 2'b00, cas_latency, burst_type, burst_length};
     logic [w_cnt-1: 0]         cnt;
     logic [ 1: 0]          latency;
-    logic [15: 0]    reg_data_read, 
-                    reg_data_write;
+    logic [15: 0]    reg_data_read;
     
 
     enum logic [3:0]
@@ -102,31 +107,38 @@ module sdram
         if (rst) begin
             cnt <= '0;
         end else begin 
-            if (cnt_vld && state == PALL)
-                cnt <= w_cnt'(delay_rp);
+            if(cnt_vld) begin
+                if (state == PALL)
+                    cnt <= w_cnt'(delay_rp);
             
-            if (cnt_vld && state == IDLE && ~set_mode_flg)
-                cnt <= w_cnt'(delay_start);
+                if (state == IDLE && ~set_mode_flg)
+                    cnt <= w_cnt'(delay_start);
             
-            if (cnt_vld && state == IDLE && instr_vld)
-                cnt <= w_cnt'(delay_rcd);
+                if (state == IDLE && instr_vld)
+                    cnt <= w_cnt'(delay_rcd);
             
-            if (cnt_vld && (state == WRITE))
-                cnt <= w_cnt'(delay_full_page + delay_dpl);
+                if (state == WRITE)
+                // cnt <= w_cnt'(delay_full_page + delay_dpl);
+                    cnt <= w_cnt'(delay_dpl);
             
-            if (cnt_vld && (state == READ))
-                cnt <= w_cnt'(delay_full_page + delay_dpl + cas_latency);
-                
-            if (cnt > '0)
-                cnt <= cnt - 1'b1;
+                if (state == READ)
+                // cnt <= w_cnt'(delay_full_page + delay_dpl + cas_latency);
+                    cnt <= w_cnt'(delay_dpl + cas_latency - 1);
+            end else begin
+
+                if (cnt > '0)
+                    cnt <= cnt - 1'b1;
+            end
         end 
     end
 
     always_ff @ (posedge clk or posedge rst) begin : inout_data
         if (rst) 
             reg_data_read <= '0;
-        else if(read_enable)
-            reg_data_read <= sdram_data_rw;
+        else if(read_enable && ~oe)
+            reg_data_read <= sdram_e;
+        else
+            reg_data_read <= '0;
     end
 
     always_ff @ (posedge clk or posedge rst) begin : write_in_sdram_mode
@@ -168,7 +180,7 @@ module sdram
                 data_rdy_reg <= '0;
     end
 
-    logic read_mode_flg;
+    
     always_ff @ (posedge clk or posedge rst) begin : read_mode
         if(rst)
             read_mode_flg <= '0;
@@ -298,7 +310,8 @@ module sdram
                 if(choose_wr_rd_reg)
                     output_enable = '1;
                 else
-                    if(cnt < w_cnt'(delay_full_page + delay_dpl) && read_mode_flg)
+                    // if(cnt < w_cnt'(delay_full_page + delay_dpl) && read_mode_flg)
+                    if(cnt < w_cnt'(delay_dpl) && read_mode_flg)
                         read_enable = '1;
 
             end         
@@ -306,9 +319,20 @@ module sdram
         endcase
     end
 
-    assign sdram_data_rw = (output_enable) ? data_in : 'z; 
+    logic read_enable_reg;
+    always_ff @ (posedge clk or posedge rst) begin : vld_read
+        if (rst) 
+            read_enable_reg <= '0;
+        else
+            read_enable_reg <= read_enable && ~oe;
+    end
+
+    assign sdram_e = data_read;
+    // assign sdram_data_rw = (output_enable) ? data_in : 'z; 
+    assign data_write = data_in;
+    assign oe = output_enable;
     assign data_out = reg_data_read;
-    assign data_read_vld = read_enable;
+    assign data_read_vld = read_enable_reg;
     assign data_rdy_out = data_rdy_reg || data_rdy;
     assign cke = '1;
     assign cs = '0;
@@ -321,20 +345,20 @@ module sdram
     //     if(rst)
     //         signal_state <= '0;
     //     else begin
-    //         if(state == WRITE)
+    //         if(~we_sdram)
     //             signal_state [0] <= 1'b1;
-    //         if(state == READ)
+    //         if(~ras)
     //             signal_state [1] <= 1'b1;
-    //         if(state == PRECHARDGE)
+    //         if(oe)
     //             signal_state [2] <= 1'b1;
-    //         if (choose_wr_rd_reg)  
+    //         if (~cas)  
     //             signal_state[3] <= 1'b1;          
     //     end
 
     // end
 
-    // // assign leds [1:0] = signal_state [1:0];
-    // // assign leds [2] = set_mode_flg;
-    // // assign leds [3] = signal_state [3];
+    // assign leds [1:0] = signal_state [1:0];
+    // assign leds [2] = set_mode_flg;
+    // assign leds [3] = signal_state [3];
     // assign leds = signal_state;
 endmodule

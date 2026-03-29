@@ -1,0 +1,13 @@
+/* Quartus Prime Version 22.1std.0 Build 915 10/25/2022 SC Lite Edition */
+JedecChain;
+	FileRevision(JESD32A);
+	DefaultMfr(6E);
+
+	P ActionCode(Cfg)
+		Device PartName(EP4CE10E22) Path("C:/Users/Lopusnya/Documents/FPGA/OV5640/OV5640_FPGA/OV5640_main/") File("OV5640_FPGA.sof") MfrSpec(OpMask(1));
+
+ChainEnd;
+
+AlteraBegin;
+	ChainType(JTAG);
+AlteraEnd;

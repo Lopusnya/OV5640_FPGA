@@ -1,0 +1,53 @@
+module rom_screen (
+    input  logic [9:0] x,    // Текущая координата X (0-639)
+    input  logic [9:0] y,    // Текущая координата Y (0-479)
+    output logic [15:0] rgb  // Цвет 565
+);
+
+    // Определяем палитру через локальные константы для удобства
+    localparam logic [15:0] WHITE   = 16'b1000_0100_0001_0000;
+    localparam logic [15:0] GREEN   = 16'b0000_0100_0000_0000;
+    localparam logic [15:0] RED     = 16'b1000_0000_0000_0000;
+    localparam logic [15:0] BLUE    = 16'b0000_0000_0001_0000;
+    localparam logic [15:0] BLACK   = 16'h0000;
+
+    // Использование всегда-комбинационного блока SystemVerilog
+    always_comb begin
+        // Рисуем цветные полосы на основе координаты X
+
+        if (x < screen_width && y < screen_height)
+        begin
+
+            if (x <     128)  rgb = WHITE;
+
+            else if (x < 2 * 128)  rgb = GREEN;
+
+            else if (x < 3 * 128)  rgb = RED;
+
+            else if (x < 4 * 128)  rgb = BLUE;
+
+            else if (x < 5 * 128)  rgb = BLACK;
+        end
+
+
+        // unique case (1'b1)
+        //     (x <   128): rgb = WHITE;
+        //     // (x <   256): rgb = GREEN;
+        //     // (x <   384): rgb = RED;
+        //     // (x <   512): rgb = BLUE;
+        //     // (x <   640): rgb = BLACK;
+        //     default:   rgb = BLACK;
+        // endcase
+
+        // // Накладываем сетку (пиксель через каждые 32 точки) для проверки геометрии
+        // if ((x % 32 == 0) || (y % 32 == 0)) begin
+        //     rgb = rgb ^ 12'h444; // Инвертируем часть яркости для сетки
+        // end
+        
+        // // Рамка по периметру
+        // if (x == 0 || x == 639 || y == 0 || y == 479) begin
+        //     rgb = WHITE;
+        // end
+    end
+
+endmodule

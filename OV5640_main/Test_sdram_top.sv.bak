@@ -1,0 +1,244 @@
+module test_sdram_top 
+#(
+    parameter w_digit = 4, clk_mhz = 100, w_key = 4, w_led = 4
+ )   
+    (
+        input clk,
+        // input clk_sdram,
+        input rst,
+        input [w_key - 1:0] key,
+        output [w_led - 1:0] leds,
+
+        //SDRAM output -------------------------------
+        output                       sdram_we,
+        output                       sdram_cas,
+        output                       sdram_ras,
+        output                       sdram_cke,
+        output                       sdram_cs,
+        output                       sdram_ldqm,
+        output                       sdram_udqm,
+        output       [         11:0] sdram_address,
+        output       [          1:0] sdram_bank,
+
+        output       [         15:0] data_write,
+        output       [         15:0] data_read,
+        output                       oe,
+
+        // inout        [         15:0] sdram_data,
+
+        //seven_segment_display output----------------
+        output logic [          7:0] abcdefgh,
+        output logic [w_digit - 1:0] digit
+        
+    );
+    
+    localparam period = 10_000_000; // 10нс * period = 1с
+    localparam w_data = 16;
+    localparam w_display_number = w_digit * $clog2(w_data);
+
+    logic [21:0] instr = 22'b00__0000_0000_0000__0000_0000; // BA - 2bits, RA - 12 bits, CA - 8bits
+
+    wire instr_rdy, data_rdy, rom_vld, wr_e, instr_vld, sdram_read_vld, full, empty;
+
+    wire [w_data - 1:0] rom_data, sdram_data_out, fifo_data_out;
+    // logic [7:0] rom_adr = 8'h00;
+
+    // always_ff @ (posedge clk or posedge rst) 
+    //     if (rst)
+    //         rom_adr <= '0;
+    //     else if (rom_vld)
+    //             if (rom_adr < 255)
+    //             rom_adr <= rom_adr + 1'b1;
+
+    //key logic, one long press == 1 impulse instr_vld. Length 1 impulse == 1 clk
+    logic key_flg_wr, key_flg_read;
+
+    always_ff @( posedge clk or posedge rst) begin : key_logic_wr
+        if(rst)
+            key_flg_wr <= '0;
+        else begin
+            if (key[0] && (key_flg_wr < 1'b1))
+                key_flg_wr <= '1;
+            
+            if (key[1])
+                key_flg_wr <= '0;
+        end
+    end
+
+    always_ff @( posedge clk or posedge rst) begin : key_logic_read
+        if(rst)
+            key_flg_read <= '0;
+        else begin
+            if (key[2] && (key_flg_read < 1'b1))
+                key_flg_read <= '1;
+            
+            if (key[3])
+                key_flg_read <= '0;
+        end
+    end
+
+    assign wr_e      = ~key[2];
+    // assign instr_vld = (key[0] && (key_flg_wr < 1'b1)) || (key[2] && (key_flg_read < 1'b1));
+    assign rom_vld = (key[0] && (key_flg_wr < 1'b1))
+
+    // -----------------------------------------------------------------------------
+
+    logic [1:0] rom_adr = 2'd0;
+
+    always_ff @ (posedge clk or posedge rst) begin
+        if (rst)
+            rom_adr <= '0;
+        else if (rom_vld)
+                if (rom_adr < 2)
+                    rom_adr <= rom_adr + 1'b1;
+    end
+
+    
+    // always_ff @ (posedge clk or posedge rst) begin
+    //     if(rst)
+    //         wr_e <= '0;
+    //     else if (key[0])
+    //         wr_e <= '1;
+    //     else
+    //         wr_e <= '0;
+    // end
+
+    // always_ff @ (posedge clk or posedge rst) begin
+    //     if(rst)
+    //         instr_vld <= '0;
+    //     else if (key[1])
+    //         instr_vld <= '1;
+    //     else
+    //         instr_vld <= '0;
+    // end
+
+    rom test_rom
+    (
+        .clk(clk),
+        .rom_adr(rom_adr),
+        .data_out(rom_data)
+    );
+
+    // assign rom_vld = ~instr_rdy && data_rdy;
+
+    sdram ram // #()
+    (
+        .clk            (           clk),
+        .rst            (           rst),
+        .wr_e           (          wr_e),
+        .leds           (          leds),
+
+        .data_rdy_out   (      data_rdy),
+        .data_in        (      rom_data),                 
+        .instr_vld      (     instr_vld),
+        .instr_rdy      (     instr_rdy), 
+        .instr          (         instr),
+        .data_read_vld  (sdram_read_vld),
+        .data_out       (sdram_data_out),
+
+        .cke            (     sdram_cke),
+        .cs             (      sdram_cs),
+        .ras            (     sdram_ras),
+        .cas            (     sdram_cas),
+        .we_sdram       (      sdram_we),
+        .ldqm           (    sdram_ldqm),
+        .udqm           (    sdram_udqm),
+        .bank_adr       (    sdram_bank),
+        .adr            ( sdram_address),
+
+        .oe             (oe),
+        .data_write     (data_write),
+        .data_read      (data_read)
+
+        // .sdram_data_rw  (    sdram_data)                  
+    );
+
+    wire push = rom_vld && ~full;
+    wire pop  = pop_enable && ~empty;
+
+    flip_flop_fifo_with_counter  
+    #(
+        .width(16),
+        .depth(4)
+    )
+    fifo
+    (
+        .clk(clk),
+        .rst(rst),
+        .push(push),
+        .pop(pop),
+        .write_data(rom_data),
+        .read_data(fifo_data_out),
+        .empty(empty),
+        .full(full)
+    );
+
+    logic [31:0] cnt_seg;
+
+    always_ff @ (posedge clk or posedge rst) begin : Sinchronizatore
+        if (rst)
+            cnt_seg <= '0;
+        else if (cnt_seg == '0)
+            cnt_seg <= period - 1'b1;
+        else
+            cnt_seg <= cnt_seg - 1'd1;
+    end
+
+    logic pop_enable;
+    always_ff @ (posedge clk or posedge rst) begin : Pop_signal_source
+        if (rst)
+            pop_enable <= '0;
+        else if (cnt_seg == '0)
+            pop_enable <= '1;
+        else
+            pop_enable <= '0;
+    end
+
+    logic [w_data - 1:0] data_seg;
+    always_ff @ (posedge clk or posedge rst) begin : reg_data_for_seg
+        if (rst)
+            data_seg <= '0;
+        else if (pop)
+            data_seg <= fifo_data_out;
+    end
+
+    seven_segment_display   
+    #(
+        .w_digit(w_digit),
+        .update_hz(480)
+    )
+    i_7segment
+    (
+        .clk      ( clk                                ),
+        .rst      ( rst                                ),
+        .number   ( w_display_number' (data_seg)       ),
+        .dots     ( w_digit' (0)                       ),
+        .abcdefgh ( abcdefgh                           ),
+        .digit    ( digit                              )
+    );
+
+    //debug  
+    // logic [w_led - 1:0] signal_state;
+    // always_ff @ (posedge clk or posedge rst) begin
+    //     if(rst)
+    //         signal_state <= '0;
+    //     else begin
+    //         if(rom_vld)
+    //             signal_state [0] <= 1'b1;
+    //         if(push)
+    //             signal_state [1] <= 1'b1;
+    //         // if(instr_vld)
+    //         //     signal_state [2] <= 1'b1;
+    //         // if (wr_e)  
+    //         //     signal_state[3] <= 1'b1;          
+    //     end
+
+    // end
+
+    // assign leds [1:0] = signal_state [1:0];
+    // assign leds [2] = key_flg_wr;
+    // assign leds [3] = key_flg_read;
+    // assign leds = signal_state;
+
+    
+endmodule
